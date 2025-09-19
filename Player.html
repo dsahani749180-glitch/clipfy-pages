@@ -1,33 +1,69 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Clipfy Player</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Twitter player card -->
+  <!-- Title & Description -->
+  <title>Clipfy - Watch Now</title>
+  <meta name="description" content="Watch this trending video instantly on Clipfy Player with no ads!" />
+
+  <!-- Twitter Card (Player) -->
   <meta name="twitter:card" content="player">
-  <meta name="twitter:title" content="Clipfy Player">
-  <meta name="twitter:description" content="Watch this video on Clipfy Player">
-  <meta name="twitter:image" content="https://clipfy.store/thumb.jpg">
-  
-  <!-- ye page khulega twitter pe -->
+  <meta name="twitter:site" content="@deep_mm1">
+  <meta name="twitter:title" content="🔥 Trending Video on Clipfy">
+  <meta name="twitter:description" content="Click to play the video directly inside Twitter!">
+  <meta name="twitter:image" content="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ1XhqVXlQ-iIhQfew7-MnWQomol2fob0tHzOKCoooo1g&s=10">
   <meta name="twitter:player" content="https://clipfy.store/Player.html">
-  <meta name="twitter:player:width" content="600">
-  <meta name="twitter:player:height" content="338">
-  
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="twitter:player:width" content="1280">
+  <meta name="twitter:player:height" content="720">
+  <meta name="twitter:player:stream" content="https://video.downloaddirect.xyz/cf004dbf-b6b9-4de5-91ea-4c86772e66b5.mp4">
+  <meta name="twitter:player:stream:content_type" content="video/mp4">
+
+  <!-- Open Graph (backup for FB/WA) -->
+  <meta property="og:type" content="video.other">
+  <meta property="og:title" content="🔥 Trending Video on Clipfy">
+  <meta property="og:description" content="Watch this trending video instantly on Clipfy Player with no ads!">
+  <meta property="og:image" content="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ1XhqVXlQ-iIhQfew7-MnWQomol2fob0tHzOKCoooo1g&s=10">
+  <meta property="og:video" content="https://video.downloaddirect.xyz/cf004dbf-b6b9-4de5-91ea-4c86772e66b5.mp4">
+  <meta property="og:video:type" content="video/mp4">
+  <meta property="og:video:width" content="1280">
+  <meta property="og:video:height" content="720">
+
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    video {
+      width: 100%;
+      height: auto;
+      max-width: 1280px;
+      max-height: 720px;
+    }
+    .cta {
+      position: absolute;
+      bottom: 20px;
+      background: rgba(255,0,0,0.85);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 18px;
+      text-decoration: none;
+      font-weight: bold;
+    }
+  </style>
 </head>
-<body style="font-family:Arial,Helvetica,sans-serif; text-align:center;">
-
-  <h3>Clipfy Player</h3>
-
-  <video id="v" controls playsinline style="width:100%;max-width:600px;">
-    <source src="https://video.downloaddirect.xyz/6501b7c8-0dfe-4232-9a29-8148e8714a03.mp4" type="video/mp4">
+<body>
+  <video controls autoplay playsinline>
+    <source src="https://video.downloaddirect.xyz/cf004dbf-b6b9-4de5-91ea-4c86772e66b5.mp4" type="video/mp4">
+    Your browser does not support the video tag.
   </video>
 
-  <div style="margin-top:10px">
-    <a href="https://t.me/YourChannel" target="_blank" style="padding:10px 20px;background:#ff4d4d;color:#fff;text-decoration:none;border-radius:5px;">Join Telegram</a>
-  </div>
-
+  <a href="https://clipfy.store" class="cta">🔥 Watch More on Clipfy</a>
 </body>
 </html>
