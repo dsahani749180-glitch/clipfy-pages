@@ -7,13 +7,23 @@
 
   <!-- Static Twitter Card meta (good default). For perfect per-video meta you will later create server-side pages. -->
   <meta name="twitter:card" content="player">
-  <meta name="twitter:site" content="@YourTwitterHandle"> <!-- replace -->
-  <meta name="twitter:title" content="Clipfy Video">
-  <meta name="twitter:description" content="Watch videos inline on Twitter">
+  <meta name="twitter:site" content="@YourTwitterHandle"> <!-- replace with your handle -->
+  <meta name="twitter:title" content="Clipfy Video Player">
+  <meta name="twitter:description" content="Watch videos inline on Twitter/X with Clipfy Player.">
   <meta name="twitter:image" content="https://clipfy.store/default-thumb.jpg"> <!-- replace/upload -->
   <meta name="twitter:player" content="https://clipfy.store/Player.html">
+  <meta name="twitter:player:stream" content="video/mp4">
   <meta name="twitter:player:width" content="920">
   <meta name="twitter:player:height" content="520">
+  <!-- Open Graph tags for better preview -->
+  <meta property="og:type" content="video.other">
+  <meta property="og:title" content="Clipfy Video Player">
+  <meta property="og:description" content="Watch videos inline on Twitter/X with Clipfy Player.">
+  <meta property="og:image" content="https://clipfy.store/default-thumb.jpg">
+  <meta property="og:video" content="">
+  <meta property="og:video:type" content="video/mp4">
+  <meta property="og:video:width" content="920">
+  <meta property="og:video:height" content="520">
 
   <style>
     :root { --maxw:920px; --player-h:520px; --ads-h:250px; }
@@ -117,7 +127,16 @@
       const videoUrl = safeDecode(v);
       const thumbUrl = safeDecode(t);
 
+      // Dynamically set Open Graph video meta for crawlers
+      if (videoUrl) {
+        var ogVideo = document.querySelector('meta[property="og:video"]');
+        if (ogVideo) ogVideo.setAttribute('content', videoUrl);
+      }
+
       if (thumbUrl) player.setAttribute('poster', thumbUrl);
+
+      // Clear previous sources (important for reloads)
+      while (player.firstChild) player.removeChild(player.firstChild);
 
       if (videoUrl) {
         // If the url is an m3u8 or mp4 we don't transcode here; we attach as <source>
@@ -128,6 +147,8 @@
         if (ext === 'm3u8') source.type = 'application/vnd.apple.mpegurl';
         else source.type = 'video/mp4';
         player.appendChild(source);
+        // Add fallback text
+        player.appendChild(document.createTextNode('Your browser does not support HTML5 video.'));
       } else {
         document.getElementById('player-wrap').innerHTML =
           "<div style='color:#fff;padding:40px;text-align:center;'>No video specified. Example test link:<br><code>https://clipfy.store/Player.html?video=https://pub-51338658718349efb6e5193255e41.r2.dev/Video_Of_Hugging_And_Dancing.mp4</code></div>";
