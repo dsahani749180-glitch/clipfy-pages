@@ -1,154 +1,155 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Clipfy Player</title>
+import os
+import tempfile
+import urllib.parse
+import subprocess
+from pathlib import Path
+import logging
 
-  <!-- Static Twitter Card meta (good default). For perfect per-video meta you will later create server-side pages. -->
-  <meta name="twitter:card" content="player">
-  <meta name="twitter:site" content="@YourTwitterHandle"> <!-- replace -->
-  <meta name="twitter:title" content="Clipfy Video">
-  <meta name="twitter:description" content="Watch videos inline on Twitter">
-  <meta name="twitter:image" content="https://clipfy.store/default-thumb.jpg"> <!-- replace/upload -->
-  <meta name="twitter:player" content="https://clipfy.store/Player.html">
-  <meta name="twitter:player:width" content="920">
-  <meta name="twitter:player:height" content="520">
+import boto3
+from botocore.client import Config
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-  <style>
-    :root { --maxw:920px; --player-h:520px; --ads-h:250px; }
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family:Inter, Roboto, Arial, sans-serif;
-      background:#ffffff;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:20px 10px;
-    }
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-    .container{
-      width:100%;
-      max-width:var(--maxw);
-    }
+# ===================================================================================
+# ===== CONFIG (IMPORTANT: Replace these with your exact final working values) =====
+# ===================================================================================
+TELE_TOKEN = "7717822867:AAF_lBMOPV-hWw4H3gwagAAfQnH7Cg3rbfM"
+R2_ENDPOINT = "https://af5a053d8f06b0b53f70b39995cc6dbd.r2.cloudflarestorage.com"
+R2_ACCESS_KEY = "753efe7e29724d1f1a078573c1422db4"
+R2_SECRET_KEY = "406f95b16dbc620640c9a94445c584a2c3742d90806377ec6c05290b662498f2"
+R2_BUCKET = "clipfy"
+PUBLIC_BASE_URL = "https://pub-51338658718349efb6e5193255e4131b.r2.dev/clipfy" # Your public R2 domain/path
+PLAYER_BASE = "https://clipfy.store/Player.html" # The URL that your Cloudflare Worker handles
+# ===================================================================================
 
-    /* Video fixed box */
-    #player-wrap{
-      width:100%;
-      background:#000;
-      border-radius:6px;
-      overflow:hidden;
-      box-shadow:0 6px 18px rgba(0,0,0,0.08);
-    }
-    video{
-      width:100%;
-      height:var(--player-h); /* fixed height so layout doesn't jump */
-      display:block;
-      background:#000;
-    }
+# Setup R2 (S3 compatible) client
+s3 = boto3.client(
+    "s3",
+    endpoint_url=R2_ENDPOINT,
+    aws_access_key_id=R2_ACCESS_KEY,
+    aws_secret_access_key=R2_SECRET_KEY,
+    config=Config(signature_version="s3v4"),
+    region_name="auto"
+)
 
-    /* Ads area fixed */
-    #ads-area{
-      width:100%;
-      min-height:var(--ads-h);
-      margin-top:18px;
-      background:#fafafa;
-      border:1px solid #e6e6e6;
-      border-radius:6px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      color:#444;
-      padding:10px;
-    }
+# --- Helper Functions ---
+def safe_filename(name: str) -> str:
+    # Keeps filename clean for keys
+    return "".join(c if c.isalnum() or c in "-._" else "_" for c in name)
 
-    /* Small responsive adjustments */
-    @media (max-width:640px){
-      :root { --maxw:640px; --player-h:360px; --ads-h:200px; }
-      body{ padding:12px 8px; }
-    }
+def r2_public_url_for_key(key: str) -> str:
+    # Constructs the public URL for the file
+    return PUBLIC_BASE_URL.rstrip("/") + "/" + urllib.parse.quote(key)
 
-    .meta-note{
-      font-size:13px;
-      color:#666;
-      margin-top:10px;
-      text-align:center;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <!-- Player -->
-    <div id="player-wrap" aria-hidden="false">
-      <video id="player" controls playsinline webkit-playsinline poster="">
-        <!-- source will be injected by JS from ?video= param -->
-        Your browser does not support HTML5 video.
-      </video>
-    </div>
+def upload_file_path(key: str, path: str, content_type: str):
+    # Uploads a local file to R2
+    with open(path, "rb") as f:
+        # ACL='public-read' is often ignored by Cloudflare, but good practice
+        s3.put_object(Bucket=R2_BUCKET, Key=key, Body=f, ContentType=content_type)
+    return r2_public_url_for_key(key)
 
-    <!-- Ads area (paste ad network script / iframe here) -->
-    <div id="ads-area">
-      <!-- Replace this with your ad network code (Adsterra / Propeller / Adsense). -->
-      <div id="ad-placeholder">
-        <strong>Advertisement</strong><br>
-        Paste ad network script or banner code into the <code>#ads-area</code> div.
-      </div>
-    </div>
+def try_generate_thumbnail(video_path: str, out_path: str) -> bool:
+    # Uses FFmpeg to generate a thumbnail from the video
+    try:
+        # -ss 00:00:02: seeks to 2 seconds for a non-black frame
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", video_path, "-ss", "00:00:02", "-vframes", "1", "-q:v", "2", out_path],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        return os.path.exists(out_path)
+    except Exception as e:
+        logger.error(f"FFmpeg failed: {e}")
+        # Note: FFmpeg must be installed and in PATH for this to work.
+        return False
 
-    <div class="meta-note">
-      Tip: use links like <code>?video=&lt;url-encoded-file-url&gt;&amp;thumb=&lt;url-encoded-thumb-url&gt;</code>
-    </div>
-  </div>
+# --- Telegram handlers ---
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Send me a video file (mp4). I’ll upload to R2 and give you a ready Player link for Twitter/X.")
 
-  <script>
-    (function(){
-      const params = new URLSearchParams(location.search);
-      const v = params.get('video');
-      const t = params.get('thumb') || '';
-      const player = document.getElementById('player');
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    file_obj = None
+    
+    # Check for video or video document
+    if msg.video:
+        file_obj = msg.video
+    elif msg.document and (msg.document.mime_type and "video" in msg.document.mime_type):
+        file_obj = msg.document
 
-      // Helper: safe decode and ensure protocol
-      function safeDecode(s){
-        if(!s) return '';
-        try { return decodeURIComponent(s); } catch(e) { return s; }
-      }
+    if file_obj:
+        await msg.reply_text("Uploading to R2... please wait ⏳")                                                                                                 
+        
+        file = await context.bot.get_file(file_obj.file_id)
+        tmpdir = tempfile.mkdtemp(prefix="clipfy_")
+        local_name = file_obj.file_name or f"{file_obj.file_unique_id}.mp4"
+        local_path = os.path.join(tmpdir, safe_filename(local_name))
+        
+        # 1. Download file locally
+        await file.download_to_drive(local_path)
 
-      const videoUrl = safeDecode(v);
-      const thumbUrl = safeDecode(t);
+        # 2. Upload video to R2 (Targeting '/videos/' folder for public access)
+        key = f"videos/{Path(local_path).name}"
+        try:
+            public_video = upload_file_path(key, local_path, "video/mp4")
+        except Exception as e:
+            await msg.reply_text(f"❌ Video upload failed: {e}")
+            return
 
-      if (thumbUrl) player.setAttribute('poster', thumbUrl);
+        # 3. Generate and upload thumbnail
+        thumb_url = ""                                                                                                                                            
+        thumb_local = os.path.join(tmpdir, "thumb.jpg")
+        if try_generate_thumbnail(local_path, thumb_local):
+            try:
+                thumb_key = f"thumbs/{Path(local_path).stem}.jpg"
+                thumb_url = upload_file_path(thumb_key, thumb_local, "image/jpeg")
+            except Exception as e:
+                logger.warning(f"Thumbnail upload failed: {e}")
 
-      if (videoUrl) {
-        // If the url is an m3u8 or mp4 we don't transcode here; we attach as <source>
-        const ext = videoUrl.split('.').pop().split('?')[0].toLowerCase();
-        const source = document.createElement('source');
-        source.src = videoUrl;
-        // choose basic type
-        if (ext === 'm3u8') source.type = 'application/vnd.apple.mpegurl';
-        else source.type = 'video/mp4';
-        player.appendChild(source);
-      } else {
-        document.getElementById('player-wrap').innerHTML =
-          "<div style='color:#fff;padding:40px;text-align:center;'>No video specified. Example test link:<br><code>https://clipfy.store/Player.html?video=https://pub-51338658718349efb6e5193255e41.r2.dev/Video_Of_Hugging_And_Dancing.mp4</code></div>";
-        return;
-      }
+        # 4. Construct the final player link for Twitter/X
+        video_title = Path(local_path).stem.replace("_", " ").title()
+        player_link = PLAYER_BASE + "?video=" + urllib.parse.quote_plus(public_video)
+        player_link += "&title=" + urllib.parse.quote_plus(video_title)
+        if thumb_url:
+            player_link += "&thumb=" + urllib.parse.quote_plus(thumb_url)
+        await msg.reply_text(
+            f"✅ Uploaded! Title: {video_title}\n\n"
+            f"🔗 Player link (Post this to Twitter/X):\n{player_link}"
+        )
 
-      // Analytics beacons (very small): change /pixel endpoints later
-      player.addEventListener('play', ()=>{
-        try {
-          navigator.sendBeacon('/pixel/played', JSON.stringify({video: videoUrl, t: Date.now()}));
-        } catch(e){}
-      });
-      player.addEventListener('ended', ()=>{
-        try {
-          navigator.sendBeacon('/pixel/completed', JSON.stringify({video: videoUrl, t: Date.now()}));
-        } catch(e){}
-      });
+        # 5. Cleanup temporary files
+        try:
+            os.remove(local_path)
+            if os.path.exists(thumb_local): os.remove(thumb_local)
+            os.rmdir(tmpdir)
+        except Exception:
+            logger.warning(f"Cleanup failed for directory: {tmpdir}")
+        return
 
-      // Prevent page scroll jump when controls focused on mobile (optional UX)
-      player.addEventListener('touchstart', ()=>{}, {passive:true});
-    })();
-  </script>
-</body>
-</html>
+    # Handle direct URL paste
+    text = (msg.text or "").strip()
+    if text.startswith("http") and ".mp4" in text:
+        video_url = text.split()[0]
+        # For URL paste, we cannot get a thumbnail or title easily
+        player_link = PLAYER_BASE + "?video=" + urllib.parse.quote_plus(video_url)
+        await msg.reply_text(f"Here’s your Player link (No custom title/thumb):\n{player_link}")
+    else:
+        await msg.reply_text("Send an mp4 file or direct mp4 link.")
+
+def main():
+    if not TELE_TOKEN:
+        logger.error("TELE_TOKEN is not set.")
+        return
+
+    app = ApplicationBuilder().token(TELE_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_message))
+    
+    logger.info("Bot started and listening for updates...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
